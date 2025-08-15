@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <title>AB Swap – Menu · Người chơi · Giải đáp (p5.js)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #0c1116;
+        color: #e9eef4;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial
+      }
+
+      .panel {
+        position: fixed;
+        left: 12px;
+        top: 12px;
+        background: #121922cc;
+        border: 1px solid #1f2b36;
+        border-radius: 12px;
+        padding: 12px 14px;
+        backdrop-filter: blur(6px);
+        z-index: 10
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 6px 0
+      }
+
+      label {
+        font-size: 12px;
+        color: #9bb0c3;
+        width: 160px
+      }
+
+      input[type=range] {
+        width: 180px
+      }
+
+      .btn {
+        padding: 8px 12px;
+        border-radius: 10px;
+        border: 1px solid #2a3948;
+        background: #16222d;
+        color: #e7f0f8;
+        cursor: pointer
+      }
+
+      .btn:hover {
+        filter: brightness(1.15)
+      }
+
+      .big {
+        font-size: 16px;
+        padding: 12px 16px
+      }
+
+      .value {
+        width: 64px;
+        text-align: right;
+        font-variant-numeric: tabular-nums
+      }
+
+      canvas {
+        display: block
+      }
+
+      #log {
+        position: fixed;
+        right: 12px;
+        top: 12px;
+        bottom: 12px;
+        width: 360px;
+        overflow: auto;
+        background: #0f151bcc;
+        border: 1px solid #1f2b36;
+        border-radius: 12px;
+        padding: 10px 12px;
+        font-size: 12px
+      }
+
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace
+      }
+
+      #menu h1 {
+        margin: 8px 0 12px 0
+      }
+    </style>
+  </head>
+  <body>
+    <!-- MENU -->
+    <div id="menu" class="panel" style="display:block">
+      <h1>AB Swap</h1>
+      <div class="row" style="flex-direction:column; align-items:flex-start; gap:12px">
+        <button id="btnPlayer" class="btn big">🎮 Chơi tự do (Người chơi)</button>
+        <button id="btnSolver" class="btn big">🧠 Xem lời giải (Giải đáp)</button>
+        <div style="font-size:12px;color:#9bb0c3;max-width:360px">Luật: Mỗi bước di chuyển đúng vào ghế trống nếu <b>(i)</b> kề ghế trống (trượt) hoặc <b>(ii)</b> cách đúng 1 người khác đội (nhảy). Mục tiêu: <span class="mono">B…B _ A…A</span>
+        </div>
+      </div>
+    </div>
+    <!-- UI NGƯỜI CHƠI -->
+    <div id="playerUI" class="panel" style="display:none">
+      <div class="row">
+        <button id="backFromPlayer" class="btn">← Về menu</button>
+        <h3 style="margin:0">Người chơi</h3>
+      </div>
+      <div class="row">
+        <label>Số người mỗi đội (n)</label>
+        <input id="nPlayer" type="number" min="1" max="12" step="1" value="3" style="width:80px">
+        <button id="applyPlayer" class="btn">Áp dụng</button>
+      </div>
+      <div class="row">
+        <button id="resetPlayer" class="btn">Reset</button>
+        <div class="mono">Bước đã đi: <span id="movesCount">0</span>
+        </div>
+      </div>
+      <div class="row" style="font-size:12px;color:#9bb0c3">Click vào người hợp lệ để di chuyển vào ghế trống. Hoàn thành khi đạt <span class="mono">B…B _ A…A</span>. </div>
+    </div>
+    <!-- UI GIẢI ĐÁP (SOLVER) -->
+    <div id="solverUI" class="panel" style="display:none">
+      <div class="row">
+        <button id="backFromSolver" class="btn">← Về menu</button>
+        <h3 style="margin:0">Giải đáp (BFS)</h3>
+      </div>
+      <div class="row">
+        <label>Số người mỗi đội (n)</label>
+        <input id="nSolver" type="range" min="1" max="12" step="1" value="3">
+        <div id="nSolverVal" class="value mono">3</div>
+      </div>
+      <div class="row">
+        <label>Tốc độ (ms/frame)</label>
+        <input id="spd" type="range" min="50" max="1000" step="10" value="250">
+        <div id="spdVal" class="value mono">250</div>
+      </div>
+      <div class="row">
+        <button class="btn" id="solve">Giải (BFS)</button>
+        <button class="btn" id="play">▶︎</button>
+        <button class="btn" id="pause">⏸</button>
+        <button class="btn" id="step">Bước</button>
+        <button class="btn" id="resetSolver">Reset</button>
+      </div>
+      <div class="row mono">Trạng thái: <span id="status">—</span>
+      </div>
+      <div class="row mono">Bước: <span id="stepIdx">0</span>/ <span id="stepTotal">0</span> · Tối thiểu n²+2n: <span id="minMoves">—</span>
+      </div>
+      <div style="font-size:12px;line-height:1.35;color:#9bb0c3">Mục tiêu: <span class="mono">B…B _ A…A</span>
+      </div>
+    </div>
+    <div id="log" class="mono" style="display:none"></div>
+    <script>
+      // ---------------------- BFS solver ----------------------
+      class State {
+        constructor(state, prev = null) {
+          this.state = state;
+          this.prev = prev;
+        }
+        generateNewStates() {
+          const newStates = [];
+          for (let i = 0; i < this.state.length; i++) {
+            if (this.state[i] === '_') {
+              if (i === 0) {
+                const ns = [...this.state];
+                ns[0] = this.state[1];
+                ns[1] = '_';
+                newStates.push(new State(ns, this));
+                break;
+              } else if (i === this.state.length - 1) {
+                const ns = [...this.state];
+                ns[i] = this.state[i - 1];
+                ns[i - 1] = '_';
+                newStates.push(new State(ns, this));
+                break;
+              } else {
+                const ns1 = [...this.state];
+                ns1[i] = this.state[i + 1];
+                ns1[i + 1] = '_';
+                newStates.push(new State(ns1, this));
+                const ns2 = [...this.state];
+                ns2[i] = this.state[i - 1];
+                ns2[i - 1] = '_';
+                newStates.push(new State(ns2, this));
+                if (i - 2 >= 0 && this.state[i - 2] !== this.state[i - 1]) {
+                  const ns3 = [...this.state];
+                  ns3[i] = this.state[i - 2];
+                  ns3[i - 2] = '_';
+                  newStates.push(new State(ns3, this));
+                }
+                if (i + 2 < this.state.length && this.state[i + 2] !== this.state[i + 1]) {
+                  const ns4 = [...this.state];
+                  ns4[i] = this.state[i + 2];
+                  ns4[i + 2] = '_';
+                  newStates.push(new State(ns4, this));
+                }
+                break;
+              }
+            }
+          }
+          return newStates;
+        }
+      }
+
+      function initialStateArr(n) {
+        return Array(n).fill('A').concat(['_'], Array(n).fill('B'));
+      }
+
+      function goalStateStr(n) {
+        return 'B'.repeat(n) + '_' + 'A'.repeat(n);
+      }
+
+      function solveBFS(startArr, targetStr) {
+        const queue = [new State(startArr, null)];
+        const visited = new Set([startArr.join('')]);
+        while (queue.length > 0) {
+          const st = queue.shift();
+          const key = st.state.join('');
+          if (key === targetStr) return st;
+          const nexts = st.generateNewStates();
+          for (const ns of nexts) {
+            const k = ns.state.join('');
+            if (!visited.has(k)) {
+              visited.add(k);
+              queue.push(ns);
+            }
+          }
+        }
+        return null;
+      }
+
+      function buildPath(n) {
+        const end = solveBFS(initialStateArr(n), goalStateStr(n));
+        const out = [];
+        let p = end;
+        while (p) {
+          out.push(p.state.join(''));
+          p = p.prev;
+        }
+        return out.reverse();
+      }
+      // ---------------------- Global state ----------------------
+      let screen = 'menu'; // 'menu' | 'player' | 'solver'
+      // Solver state
+      let nSolver = 3,
+        speed = 250;
+      let path = [],
+        idx = 0,
+        playing = false;
+      // Player state
+      let nPlayer = 3,
+        moves = 0;
+      let playerArr = initialStateArr(nPlayer),
+        playerGoal = goalStateStr(nPlayer);
+      // ---------------------- p5 setup ----------------------
+      function setup() {
+        const W = Math.min(window.innerWidth - 380, 1200);
+        const H = Math.min(window.innerHeight, 560);
+        createCanvas(W, H);
+        pixelDensity(1);
+        noStroke();
+        bindUI();
+        showMenu();
+      }
+
+      function windowResized() {
+        const W = Math.min(window.innerWidth - 380, 1200);
+        const H = Math.min(window.innerHeight, 560);
+        resizeCanvas(W, H);
+      }
+      // ---------------------- UI wiring ----------------------
+      function bindUI() {
+        // menu
+        document.getElementById('btnPlayer').onclick = showPlayer;
+        document.getElementById('btnSolver').onclick = showSolver;
+        // player
+        document.getElementById('backFromPlayer').onclick = showMenu;
+        document.getElementById('applyPlayer').onclick = () => {
+          nPlayer = clampInt(document.getElementById('nPlayer').value, 1, 12);
+          resetPlayer();
+        };
+        document.getElementById('resetPlayer').onclick = resetPlayer;
+        // solver
+        document.getElementById('backFromSolver').onclick = showMenu;
+        const nSolEl = document.getElementById('nSolver');
+        const nSolVal = document.getElementById('nSolverVal');
+        nSolEl.oninput = () => {
+          nSolver = parseInt(nSolEl.value, 10);
+          nSolVal.textContent = nSolver;
+          rebuildSolver();
+        };
+        const spdEl = document.getElementById('spd');
+        const spdVal = document.getElementById('spdVal');
+        spdEl.oninput = () => {
+          speed = parseInt(spdEl.value, 10);
+          spdVal.textContent = speed;
+        };
+        document.getElementById('solve').onclick = rebuildSolver;
+        document.getElementById('play').onclick = () => {
+          playing = true;
+          document.getElementById('status').textContent = 'Đang chạy';
+          loop();
+        };
+        document.getElementById('pause').onclick = () => {
+          playing = false;
+          document.getElementById('status').textContent = 'Tạm dừng';
+        };
+        document.getElementById('step').onclick = stepOnce;
+        document.getElementById('resetSolver').onclick = () => {
+          idx = 0;
+          playing = false;
+          updateSolverInfo();
+          redraw();
+        };
+      }
+
+      function clampInt(v, lo, hi) {
+        v = parseInt(v, 10);
+        if (isNaN(v)) v = lo;
+        return Math.max(lo, Math.min(hi, v));
+      }
+
+      function showMenu() {
+        screen = 'menu';
+        togglePanels();
+        noLoop();
+        redraw();
+      }
+
+      function showPlayer() {
+        screen = 'player';
+        togglePanels();
+        resetPlayer();
+        noLoop();
+        redraw();
+      }
+
+      function showSolver() {
+        screen = 'solver';
+        togglePanels();
+        rebuildSolver();
+        noLoop();
+        redraw();
+      }
+
+      function togglePanels() {
+        document.getElementById('menu').style.display = (screen === 'menu') ? 'block' : 'none';
+        document.getElementById('playerUI').style.display = (screen === 'player') ? 'block' : 'none';
+        document.getElementById('solverUI').style.display = (screen === 'solver') ? 'block' : 'none';
+        document.getElementById('log').style.display = (screen === 'solver') ? 'block' : 'none';
+      }
+      // ---------------------- Solver helpers ----------------------
+      function rebuildSolver() {
+        path = buildPath(nSolver);
+        idx = 0;
+        playing = false;
+        updateSolverInfo();
+        const states = path.map((s, i) => `${i.toString().padStart(3,'0')}: ${s}`).join('\n');
+        document.getElementById('log').textContent = `Trạng thái (tổng ${path.length-1} bước): ${states}`;
+      }
+
+      function updateSolverInfo() {
+        document.getElementById('status').textContent = (idx === path.length - 1 ? 'Hoàn thành' : 'Sẵn sàng');
+        document.getElementById('stepIdx').textContent = idx;
+        document.getElementById('stepTotal').textContent = path.length - 1;
+        document.getElementById('minMoves').textContent = `${nSolver*nSolver + 2*nSolver} (BFS: ${Math.max(0,path.length-1)})`;
+      }
+
+      function stepOnce() {
+        if (idx < path.length - 1) {
+          idx++;
+          updateSolverInfo();
+        }
+        if (idx === path.length - 1) {
+          playing = false;
+          document.getElementById('status').textContent = 'Hoàn thành';
+        }
+        redraw();
+      }
+      // ---------------------- Player helpers ----------------------
+      function resetPlayer() {
+        playerArr = initialStateArr(nPlayer);
+        playerGoal = goalStateStr(nPlayer);
+        moves = 0;
+        document.getElementById('movesCount').textContent = moves;
+      }
+
+      function legalSources(arr) {
+        const res = [];
+        const L = arr.length;
+        const e = arr.indexOf('_');
+        if (e - 1 >= 0 && arr[e - 1] !== '_') res.push(e - 1);
+        if (e + 1 < L && arr[e + 1] !== '_') res.push(e + 1);
+        if (e - 2 >= 0 && arr[e - 2] !== '_' && arr[e - 1] !== '_' && arr[e - 2] !== arr[e - 1]) res.push(e - 2);
+        if (e + 2 < L && arr[e + 2] !== '_' && arr[e + 1] !== '_' && arr[e + 2] !== arr[e + 1]) res.push(e + 2);
+        return res;
+      }
+
+      function doMove(arr, fromIdx) {
+        const e = arr.indexOf('_');
+        const sources = legalSources(arr);
+        if (!sources.includes(fromIdx)) return false;
+        [arr[e], arr[fromIdx]] = [arr[fromIdx], arr[e]];
+        return true;
+      }
+      // ---------------------- Drawing ----------------------
+      let lastFrame = 0;
+
+      function draw() {
+        background('#0c1116');
+        if (screen === 'solver') {
+          if (playing) {
+            if (millis() - lastFrame >= speed) {
+              lastFrame = millis();
+              stepOnce();
+            }
+          }
+          if (path && path.length) {
+            drawStateString(path[idx]);
+          }
+        } else if (screen === 'player') {
+          drawStateArray(playerArr);
+          // highlight legal sources
+          const src = legalSources(playerArr);
+          const L = playerArr.length;
+          const pad = 40;
+          const availW = width - pad * 2;
+          const seatW = Math.min(64, Math.floor(availW / L));
+          const startX = (width - seatW * L) / 2;
+          const y = height * 0.55;
+          noFill();
+          stroke(100, 220, 255);
+          strokeWeight(2);
+          for (const i of src) {
+            const x = startX + i * seatW + (seatW - 6) / 2;
+            circle(x, y - 28, 36);
+          }
+          noStroke();
+        }
+      }
+
+      function drawPerson(cx, cy, col, label) {
+        push();
+        noStroke();
+        fill(col);
+        ellipse(cx, cy, 34, 34);
+        fill(0, 60);
+        ellipse(cx, cy + 2, 34, 10);
+        fill(20, 30, 40);
+        textAlign(CENTER, CENTER);
+        textSize(16);
+        text(label, cx, cy);
+        pop();
+      }
+
+      function drawStateString(s) {
+        const L = s.length;
+        const pad = 40;
+        const availW = width - pad * 2;
+        const seatW = Math.min(64, Math.floor(availW / L));
+        const startX = (width - seatW * L) / 2;
+        const y = height * 0.55;
+        for (let i = 0; i < L; i++) {
+          const x = startX + i * seatW;
+          fill('#16212b');
+          rect(x, y, seatW - 6, 36, 10);
+        }
+        for (let i = 0; i < L; i++) {
+          const x = startX + i * seatW + (seatW - 6) / 2;
+          const ch = s[i];
+          if (ch === 'A') {
+            drawPerson(x, y - 28, '#6bb5ff', 'A');
+          } else if (ch === 'B') {
+            drawPerson(x, y - 28, '#f7a35c', 'B');
+          } else {
+            push();
+            fill(255, 220);
+            textAlign(CENTER, CENTER);
+            textSize(18);
+            text('_', x, y - 18);
+            pop();
+          }
+        }
+        push();
+        fill('#9bb0c3');
+        textAlign(CENTER);
+        textSize(12);
+        const goal = goalStateStr(Math.floor((L - 1) / 2));
+        text(`Mục tiêu: ${goal}`, width / 2, 24);
+        pop();
+        push();
+        fill('#bcd1e4');
+        textAlign(CENTER);
+        textSize(16);
+        text(s, width / 2, y + 72);
+        pop();
+      }
+
+      function drawStateArray(arr) {
+        drawStateString(arr.join(''));
+      }
+
+      function mousePressed() {
+        if (screen !== 'player') return;
+        const L = playerArr.length;
+        const pad = 40;
+        const availW = width - pad * 2;
+        const seatW = Math.min(64, Math.floor(availW / L));
+        const startX = (width - seatW * L) / 2;
+        const i = Math.floor((mouseX - startX) / seatW);
+        if (i < 0 || i >= L) return;
+        if (doMove(playerArr, i)) {
+          moves++;
+          document.getElementById('movesCount').textContent = moves;
+          redraw();
+          if (playerArr.join('') === playerGoal) {
+            setTimeout(() => alert(`Hoàn thành trong ${moves} bước!`), 10);
+          }
+        }
+      }
+    </script>
+  </body>
+</html>
